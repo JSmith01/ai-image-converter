@@ -1,0 +1,28 @@
+{
+  "name": "ai-image-converter",
+  "version": "1.0.0",
+  "description": "",
+  "license": "MIT",
+  "author": "Dmitry Zlygin",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests",
+    "asbuild:debug": "asc assembly/index.ts --target debug",
+    "asbuild:release": "asc assembly/index.ts --target release",
+    "asbuild:optimized": "asc assembly/optimized.ts --target optimized",
+    "asbuild": "npm run asbuild:debug && npm run asbuild:release",
+    "build": "esbuild image-converter.ts --platform=node --outfile=build/image-converter.mjs",
+    "start": "npx serve ."
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.27.34",
+    "esbuild": "0.25.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./build/release.js",
+      "types": "./build/release.d.ts"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "targets": {
+    "debug": {
+      "outFile": "build/debug.wasm",
+      "textFile": "build/debug.wat",
+      "sourceMap": true,
+      "debug": true
+    },
+    "release": {
+      "outFile": "build/release.wasm",
+      "textFile": "build/release.wat",
+      "sourceMap": true,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": false,
+      "noAssert": false
+    },
+    "optimized": {
+      "outFile": "build/optimized.wasm",
+      "textFile": "build/optimized.wat",
+      "sourceMap": false,
+      "optimizeLevel": 3,
+      "shrinkLevel": 2,
+      "converge": true,
+      "noAssert": false
+    }
+  },
+  "options": {
+    "bindings": "raw",
+    "importMemory": true,
+    "noExportMemory": true,
+    "enable": ["simd"]
+  }
+}
