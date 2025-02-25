@@ -13,9 +13,6 @@ output appears at the offset `imageConverterInstance.outputPtr`.
 For convenience the class provides two methods `getInputBufferView` and
 `getOutputBufferView` for input and output accordingly.
 
-The initialization is asynchronous right now, so `initPromise` property of the instance
-exists.
-
 Initial assumption for the class is the max image size of **1920 x 1920**. If bigger image
 is required, it needs to either changing `ImageConverter.maxDimension` before instantiating
 the class, or in runtime `imageConverterInstance.adjustMemory(width, height)` method can be used.
@@ -30,12 +27,10 @@ and it's possible to extract data from `VideoFrame` objects to it directly using
 [MediaStreamTrackProcessor](https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamTrackProcessor) API.
 
 
-## TODO
-
-It needs sync initialization (inlining of a base64 wasm content required).
-
-### Methods to implement
+## Methods to implement
 
 * `convertHWToI444`
 * `convertCHWToI444`
 * `convertNV12TileToCHW`
+
+Potentially it'd be nice to have a basic ONNX wrapper to make usual and tiled inference.

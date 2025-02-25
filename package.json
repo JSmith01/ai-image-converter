@@ -12,7 +12,9 @@
     "asbuild:release": "asc assembly/index.ts --target release",
     "asbuild:optimized": "asc assembly/optimized.ts --target optimized",
     "asbuild": "npm run asbuild:debug && npm run asbuild:release && npm run asbuild:optimized",
-    "build": "esbuild image-converter.ts --platform=node --outfile=build/image-converter.mjs",
+    "inject-base64": "node inject-base64.js",
+    "build-mjs": "esbuild build/image-converter-injected.ts --platform=node --outfile=build/image-converter.mjs",
+    "build": "npm run asbuild && npm run inject-base64 && npm run build-mjs",
     "start": "npx serve ."
   },
   "devDependencies": {

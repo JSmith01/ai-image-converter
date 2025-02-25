@@ -1,14 +1,20 @@
-// @ts-ignore
-const IS_NODE = typeof process != "undefined" && process.versions != null && process.versions.node != null;
+const MODULE_SOURCE = 'BASE64';
 
-const loadWasm = IS_NODE
-    // @ts-ignore
-    ? async (file: string, imports?: WebAssembly.Imports) => import('node:fs/promises')
-        .then(({ readFile }) => readFile(file))
-        .then(binary => WebAssembly.compile(binary))
-        .then(module => WebAssembly.instantiate(module, imports))
-    : (file: string, imports?: WebAssembly.Imports) => WebAssembly.instantiateStreaming(fetch(file), imports)
-        .then(({ instance }) => instance);
+let module: WebAssembly.Module | undefined;
+
+function loadWasm(imports?: WebAssembly.Imports) {
+    if (!module) {
+        const s = atob(MODULE_SOURCE);
+        const bytes = new Uint8Array(s.length);
+        for (let i = 0; i < s.length; i++) {
+            bytes[i] = s.charCodeAt(i);
+        }
+
+        module = new WebAssembly.Module(bytes);
+    }
+
+    return new WebAssembly.Instance(module, imports);
+}
 
 type i32 = number;
 
@@ -26,14 +32,12 @@ class ImageConverter {
         return Math.ceil(ImageConverter.maxDimension * ImageConverter.maxDimension / 8192);
     }
 
-    wasmHelpers: WasmFunctions;
-
     memory = new WebAssembly.Memory({ initial: ImageConverter.getPages() });
     outputPtr = this.memory.buffer.byteLength / 2;
 
-    initPromise = loadWasm('./build/optimized.wasm', { env: { memory: this.memory } }).then(({ exports }) => {
-        this.wasmHelpers = exports as unknown as WasmFunctions;
-    });
+    instance = loadWasm({ env: { memory: this.memory } });
+
+    wasmHelpers: WasmFunctions = this.instance.exports as unknown as WasmFunctions;
 
     adjustMemory(width: number, height: number) {
         if (width * height <= ImageConverter.maxDimension * ImageConverter.maxDimension) return;
