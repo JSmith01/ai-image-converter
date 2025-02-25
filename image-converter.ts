@@ -83,7 +83,7 @@ class ImageConverter {
         this.wasmHelpers.I420ToCHW(0, this.outputPtr, width, height);
     }
 
-    takeTile(x: number, y: number, width: number, height: number, frameWidth: number, frameHeight: number) {
+    convertI420TileToCHW(x: number, y: number, width: number, height: number, frameWidth: number, frameHeight: number) {
         if (!this.wasmHelpers) throw new Error(`initialization hasn't finished yet`);
 
         console.assert(x % 4 === 0, `Incorrect x = ${x} not divisible by 8`);
