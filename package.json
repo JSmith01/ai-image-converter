@@ -11,7 +11,7 @@
     "asbuild:debug": "asc assembly/index.ts --target debug",
     "asbuild:release": "asc assembly/index.ts --target release",
     "asbuild:optimized": "asc assembly/optimized.ts --target optimized",
-    "asbuild": "npm run asbuild:debug && npm run asbuild:release",
+    "asbuild": "npm run asbuild:debug && npm run asbuild:release && npm run asbuild:optimized",
     "build": "esbuild image-converter.ts --platform=node --outfile=build/image-converter.mjs",
     "start": "npx serve ."
   },

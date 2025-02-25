@@ -1,6 +1,8 @@
+// @ts-ignore
 const IS_NODE = typeof process != "undefined" && process.versions != null && process.versions.node != null;
 
 const loadWasm = IS_NODE
+    // @ts-ignore
     ? async (file: string, imports?: WebAssembly.Imports) => import('node:fs/promises')
         .then(({ readFile }) => readFile(file))
         .then(binary => WebAssembly.compile(binary))
@@ -14,6 +16,7 @@ interface WasmFunctions {
     Nv12ToHW(inputNv12: i32, outputBuffer: i32, size: i32): void;
     Nv12ToCHW(inputNv12: i32, outputBuffer: i32, width: i32, height: i32): void;
     I420ToCHW(inputNv12: i32, outputBuffer: i32, width: i32, height: i32): void;
+    I420TileToCHW(inputI420$: i32, outputBuffer$: i32, x: i32, y: i32, width: i32, height: i32, frameWidth: i32, frameHeight: i32): void;
 }
 
 class ImageConverter {
@@ -28,7 +31,7 @@ class ImageConverter {
     memory = new WebAssembly.Memory({ initial: ImageConverter.getPages() });
     outputPtr = this.memory.buffer.byteLength / 2;
 
-    initPromise = loadWasm('./build/optimized.wasm', { env: { memory: this.memory} }).then(({ exports }) => {
+    initPromise = loadWasm('./build/optimized.wasm', { env: { memory: this.memory } }).then(({ exports }) => {
         this.wasmHelpers = exports as unknown as WasmFunctions;
     });
 
@@ -59,7 +62,7 @@ class ImageConverter {
     convertNv12ToHW(width: number, height: number) {
         if (!this.wasmHelpers) throw new Error(`initialization hasn't finished yet`);
 
-        console.assert((width * height) % 4 === 0, `Incorrect ${width}x${height} not divisible by 4`);
+        console.assert((width * height) % 4 === 0, `Incorrect (width x height) = ${width}x${height} not divisible by 4`);
 
         this.wasmHelpers.Nv12ToHW(0, this.outputPtr, width * height);
     }
@@ -67,7 +70,7 @@ class ImageConverter {
     convertNv12ToCHW(width: number, height: number) {
         if (!this.wasmHelpers) throw new Error(`initialization hasn't finished yet`);
 
-        console.assert(width % 4 === 0, `Incorrect ${width} not divisible by 4`);
+        console.assert(width % 4 === 0, `Incorrect width = ${width} not divisible by 4`);
 
         this.wasmHelpers.Nv12ToCHW(0, this.outputPtr, width, height);
     }
@@ -75,9 +78,18 @@ class ImageConverter {
     convertI420ToCHW(width: number, height: number) {
         if (!this.wasmHelpers) throw new Error(`initialization hasn't finished yet`);
 
-        console.assert(width % 8 === 0, `Incorrect ${width} not divisible by 8`);
+        console.assert(width % 8 === 0, `Incorrect width = ${width} not divisible by 8`);
 
         this.wasmHelpers.I420ToCHW(0, this.outputPtr, width, height);
+    }
+
+    takeTile(x: number, y: number, width: number, height: number, frameWidth: number, frameHeight: number) {
+        if (!this.wasmHelpers) throw new Error(`initialization hasn't finished yet`);
+
+        console.assert(x % 4 === 0, `Incorrect x = ${x} not divisible by 8`);
+        console.assert(width % 8 === 0, `Incorrect width = ${width} not divisible by 8`);
+
+        this.wasmHelpers.I420TileToCHW(0, this.outputPtr, x, y, width, height, frameWidth, frameHeight);
     }
 
     convertNv12ToHWC(width: number, height: number) {

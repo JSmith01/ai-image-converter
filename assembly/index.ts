@@ -181,3 +181,64 @@ export function I420ToCHWTensorOpt(inputI420: i32, outputBuffer: i32, width: i32
         }
     }
 }
+
+export function I420TileToCHWOpt(inputI420$: i32, outputBuffer$: i32, x: i32, y: i32, width: i32, height: i32, frameWidth: i32, frameHeight: i32): void {
+    let input$: i32 = inputI420$ + x + y * frameWidth;
+    let output$: i32 = outputBuffer$;
+    let lines: i32 = height;
+    let v: v128;
+    let hCounter: i32;
+    while (lines > 0) {
+        hCounter = width;
+        while (hCounter > 0) {
+            // copy-paste to avoid stack use
+            v = v128.load32_splat(input$);
+            v = v128.extend_low<u8>(v);
+            v = v128.extend_low<u16>(v);
+            v = v128.convert<u32>(v);
+            store<v128>(output$, f32x4.div(v, NORMALIZE_VECTOR)); // 4 x u8 -> 4 x f32
+            input$ += 4;
+            output$ += 16;
+            hCounter -= 4;
+        }
+        input$ += frameWidth - width;
+        lines--;
+    }
+
+    const planeYSize = frameWidth * frameHeight;
+    const uvTileOffset = (x + y * frameWidth / 2) / 2;
+    input$ = inputI420$ + planeYSize + uvTileOffset;
+    lines = y / 2;
+    const uvWidth = width / 2;
+    let planeCounter: i32 = 1;
+
+    while (lines > 0) {
+        hCounter = uvWidth;
+        while (hCounter > 0) {
+            // copy-paste to avoid stack use
+            v = v128.load32_splat(input$); // assumes width is divisible by 8
+            v = v128.extend_low<u8>(v);
+            v = v128.extend_low<u16>(v);
+            v = v128.convert<u32>(v);
+            v = f32x4.div(v, NORMALIZE_VECTOR);
+            // four 4 from the input become 8 pixels in the output - ABCD -> AABBCCDD
+            // each with conversion (u8 / 255) -> f32
+            v128.store(output$, v128.swizzle(v, I1_PARTS), 0);
+            v128.store(output$, v128.swizzle(v, I2_PARTS), 16);
+            input$ += 4;
+            hCounter -= 4;
+        }
+        // copy U/V line to double vertical resolution
+        memory.copy(output$, output$ - 4 * width, 4 * width);
+        output$ += 4 * width;
+        input$ += frameWidth - uvWidth;
+        lines--;
+
+        // V plane start
+        if (lines <= 0 && planeCounter > 0) {
+            planeCounter--;
+            lines = y / 2;
+            input$ = inputI420$ + planeYSize * 2 + uvTileOffset;
+        }
+    }
+}
