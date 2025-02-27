@@ -182,13 +182,18 @@ export function I420ToCHWTensorOpt(inputI420: i32, outputBuffer: i32, width: i32
     }
 }
 
-export function I420TileToCHWOpt(inputI420$: i32, outputBuffer$: i32, x: i32, y: i32, width: i32, height: i32, frameWidth: i32, frameHeight: i32): void {
+export function I420TileToCHW(inputI420$: i32, outputBuffer$: i32, x: i32, y: i32, width: i32, height: i32, frameWidth: i32, frameHeight: i32): void {
+    const planeYSize = frameWidth * frameHeight;
+    const planeUOffset = inputI420$ + planeYSize + (x >> 1) + (y >> 1) * (frameWidth >> 1);
+    const planeVOffset = planeUOffset + planeYSize / 4;
+    const uvLines = (height >> 1);
     let input$: i32 = inputI420$ + x + y * frameWidth;
     let output$: i32 = outputBuffer$;
-    let lines: i32 = height;
+    let yLines: i32 = height;
+    const widthOffset = width * 4;
     let v: v128;
     let hCounter: i32;
-    while (lines > 0) {
+    while (yLines > 0) {
         hCounter = width;
         while (hCounter > 0) {
             // copy-paste to avoid stack use
@@ -202,13 +207,11 @@ export function I420TileToCHWOpt(inputI420$: i32, outputBuffer$: i32, x: i32, y:
             hCounter -= 4;
         }
         input$ += frameWidth - width;
-        lines--;
+        yLines--;
     }
 
-    const planeYSize = frameWidth * frameHeight;
-    const uvTileOffset = (x + y * frameWidth / 2) / 2;
-    input$ = inputI420$ + planeYSize + uvTileOffset;
-    lines = y / 2;
+    input$ = planeUOffset;
+    let lines = uvLines;
     const uvWidth = width / 2;
     let planeCounter: i32 = 1;
 
@@ -227,18 +230,19 @@ export function I420TileToCHWOpt(inputI420$: i32, outputBuffer$: i32, x: i32, y:
             v128.store(output$, v128.swizzle(v, I2_PARTS), 16);
             input$ += 4;
             hCounter -= 4;
+            output$ += 32;
         }
         // copy U/V line to double vertical resolution
-        memory.copy(output$, output$ - 4 * width, 4 * width);
-        output$ += 4 * width;
-        input$ += frameWidth - uvWidth;
+        memory.copy(output$, output$ - widthOffset, widthOffset);
+        output$ += widthOffset;
+        input$ += frameWidth / 2 - uvWidth;
         lines--;
 
         // V plane start
         if (lines <= 0 && planeCounter > 0) {
             planeCounter--;
-            lines = y / 2;
-            input$ = inputI420$ + planeYSize * 2 + uvTileOffset;
+            lines = uvLines;
+            input$ = planeVOffset;
         }
     }
 }

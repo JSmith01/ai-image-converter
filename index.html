@@ -9,26 +9,31 @@ Playground
     import ImageConverter from './build/image-converter.mjs';
     const c = new ImageConverter();
 
-    const w = 8;
-    const h = 4;
-    const size = w * h;
-    const input = c.getInputBufferView(w, h);
+    const w = {
+        c,
+        w: 8,
+        h: 4,
+        input: null,
+        output: null,
+        get nOut() {
+            return w.output.map(v => v * 255);
+        }
+    };
 
-    for(let i = 0; i < size * 1.5; i++) {
-        input[i] = i % 256;
+    function init(width, height) {
+        w.h = height;
+        w.w = width;
+        w.input = c.getInputBufferView(width, height);
+        w.output = c.getOutputBufferView(width, height);
+        for (let i = 0; i < w.input.length; i++) {
+            w.input[i] = i % 255;
+        }
+        w.output.fill(0);
     }
 
-    const output = c.getOutputBufferView(w, h);
-    window.w = {
-        input,
-        output,
-        get outputMapped() {
-            return output.map(v => v * 255);
-        },
-        w, h,
-        size,
-        c
-    }
+    init(8, 4);
+    w.init = init;
+    window.w = w;
 
     console.log(window.w);
 </script>

@@ -20,17 +20,34 @@ const imports = {
     const { buffer } = imports.env.memory;
     const wasm = instance.exports;
 
-    const w = 1920;
-    const h = 1080;
+    const w = 16;
+    const h = 4;
     const inputPtr = 0;
     const size = w * h;
     const outputPtr = size * 1.5;
-    const input = new Uint8Array(buffer, inputPtr, size);
+    const input = new Uint8Array(buffer, inputPtr, size * 1.5);
     for(let i = 0; i < size * 1.5; i++) {
         input[i] = i % 256;
     }
 
-    const output = new Float32Array(buffer, outputPtr, size);
+    const printM = (a, w, l = 4) => {
+        for (let i = 0; i < a.length; i += w) {
+            console.log(Array.from(a.slice(i, w + i)).map(i => String(i).padStart(l, ' ')).join(''));
+        }
+    }
+
+    printM(input.slice(0, 64), w);
+    console.log('');
+    printM(input.slice(64, 80), 8, 8);
+    console.log('');
+    printM(input.slice(80, 96), 8, 8);
+
+    const output = new Float32Array(buffer, outputPtr, size * 3);
+    const tw = 8;
+    const th = 4;
+    wasm.I420TileToCHW(inputPtr, outputPtr, 0, 0, tw, th, w, h);
+    console.log('\n\n');
+    printM(output.map(v=> v * 255), tw);
 
     const NS_PER_SEC = 1e9;
 
