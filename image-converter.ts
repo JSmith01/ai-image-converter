@@ -25,28 +25,48 @@ interface WasmFunctions {
     I420TileToCHW(inputI420$: i32, outputBuffer$: i32, x: i32, y: i32, width: i32, height: i32, frameWidth: i32, frameHeight: i32): void;
 }
 
-class ImageConverter {
-    static maxDimension = 1920;
+const alignSizeTo16 = (n: number) => Math.ceil(n / 16) * 16;
 
-    static getPages() {
-        return Math.ceil(ImageConverter.maxDimension * ImageConverter.maxDimension / 8192);
+class ImageConverter {
+    static maxWidth = 1280;
+    static maxHeight = 720;
+    currentMaxSize: number;
+    memory: WebAssembly.Memory;
+    outputPtr: number;
+    instance: WebAssembly.Instance;
+    wasmHelpers: WasmFunctions;
+
+    constructor(width = ImageConverter.maxWidth, height = ImageConverter.maxHeight) {
+        this.adjustMemory(width, height);
+        this.instance = loadWasm({ env: { memory: this.memory } });
+        this.wasmHelpers = this.instance.exports as unknown as WasmFunctions;
     }
 
-    memory = new WebAssembly.Memory({ initial: ImageConverter.getPages() });
-    outputPtr = this.memory.buffer.byteLength / 2;
+    _getAlignedYUVBufferSize() {
+        // considering input is I420 or NV12, so U and V have quarter of Y (half in both vertical and horizontal)
+        return alignSizeTo16(this.currentMaxSize * 1.5);
+    }
 
-    instance = loadWasm({ env: { memory: this.memory } });
+    _getMemorySize() {
+        const alignedYUVBufferSize = this._getAlignedYUVBufferSize();
+        // 4 bytes per fp32 value, 3 full-size channels
+        const alignedOutputBufferSize = alignSizeTo16(this.currentMaxSize * 12);
 
-    wasmHelpers: WasmFunctions = this.instance.exports as unknown as WasmFunctions;
+        return Math.ceil((alignedYUVBufferSize + alignedOutputBufferSize) / 65536);
+    }
 
     adjustMemory(width: number, height: number) {
-        if (width * height <= ImageConverter.maxDimension * ImageConverter.maxDimension) return;
+        if (this.currentMaxSize > 0 && width * height <= this.currentMaxSize) return;
 
-        const pagesReserved = ImageConverter.maxDimension;
-        ImageConverter.maxDimension = Math.ceil(Math.max(width, height) / 4) * 4;
-        const pagesNeeded = ImageConverter.getPages();
-        this.memory.grow(pagesNeeded - pagesReserved);
-        this.outputPtr = this.memory.buffer.byteLength / 2;
+        this.currentMaxSize = width * height;
+        const pagesNeeded = this._getMemorySize();
+        this.outputPtr = this._getAlignedYUVBufferSize();
+        if (this.memory) {
+            const pagesReserved = this.memory.buffer.byteLength / 65536;
+            this.memory.grow(pagesNeeded - pagesReserved);
+        } else {
+            this.memory = new WebAssembly.Memory({ initial: pagesNeeded });
+        }
     }
 
     getInputBufferView(width: number, height: number, channels = 3) {
