@@ -185,3 +185,168 @@ export function I420TileToCHW(inputI420$: i32, outputBuffer$: i32, x: i32, y: i3
         }
     }
 }
+
+/**
+ * Bilinear upscale of a single channel image (2x in each dimension)
+ * @param src Source image data pointer
+ * @param dst Destination image buffer pointer (must be 4x the size of source)
+ * @param srcWidth Width of source image
+ * @param srcHeight Height of source image
+ */
+export function bilinearUpscaleChannel(
+  src: usize, 
+  dst: usize, 
+  srcWidth: i32, 
+  srcHeight: i32
+): void {
+  const dstWidth = srcWidth * 2;
+
+  for (let y = 0; y < srcHeight; y++) {
+    const srcRow0 = src + y * srcWidth;
+    const srcRow1 = (y + 1 < srcHeight) ? srcRow0 + srcWidth : srcRow0;
+    const dstRow0 = dst + (2 * y) * dstWidth;
+    const dstRow1 = dst + (2 * y + 1) * dstWidth;
+    
+    // Process 16 pixels at a time using SIMD
+    let x: i32 = 0;
+    for (; x <= srcWidth - 16; x += 16) {
+      // Load 16 pixels from the current position
+      const topLeft = v128.load(srcRow0 + x);
+      
+      // For the right pixels, we need to handle potential boundary
+      let topRight: v128, bottomRight: v128;
+      if (x + 16 < srcWidth) {
+        // Not at the right edge, safe to load shifted
+        topRight = v128.load(srcRow0 + x + 1);
+        bottomRight = v128.load(srcRow1 + x + 1);
+      } else {
+        // At the right edge, handle boundary with SIMD masks
+        const remainingPixels = srcWidth - x - 1;
+        
+        if (remainingPixels > 0) {
+          // Load as much as we can directly (unaligned is fine)
+          topRight = v128.load(srcRow0 + x + 1);
+          bottomRight = v128.load(srcRow1 + x + 1);
+          
+          // For any pixels that would read past the end, replace with the last valid pixel
+          if (remainingPixels < 16) {
+            const lastPixelTR = load<u8>(srcRow0 + srcWidth - 1);
+            const lastPixelBR = load<u8>(srcRow1 + srcWidth - 1);
+            
+            // Create vectors with replicated last valid pixel
+            const lastTRVector = v128.splat<u8>(lastPixelTR);
+            const lastBRVector = v128.splat<u8>(lastPixelBR);
+            
+            // Create a mask based on remainingPixels
+            // We need all 1s for valid pixels, all 0s for invalid ones
+            let byteMask: v128;
+            
+            // Select appropriate mask based on remainingPixels
+            if (remainingPixels == 1) {
+              byteMask = v128(-1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 2) {
+              byteMask = v128(-1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 3) {
+              byteMask = v128(-1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 4) {
+              byteMask = v128(-1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 5) {
+              byteMask = v128(-1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 6) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 7) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 8) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 9) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 10) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 11) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0);
+            } else if (remainingPixels == 12) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0);
+            } else if (remainingPixels == 13) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0);
+            } else if (remainingPixels == 14) {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0);
+            } else /* remainingPixels == 15 */ {
+              byteMask = v128(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0);
+            }
+            
+            // Use bitwise operations to blend the loaded value and the last valid pixel
+            // Format: (loaded & mask) | (lastPixel & ~mask)
+            // This keeps loaded values where mask is -1 and uses lastPixel where mask is 0
+            topRight = v128.or(
+              v128.and(topRight, byteMask),
+              v128.and(lastTRVector, v128.not(byteMask))
+            );
+            
+            bottomRight = v128.or(
+              v128.and(bottomRight, byteMask),
+              v128.and(lastBRVector, v128.not(byteMask))
+            );
+          }
+        } else {
+          // Edge case: x + 1 is already past srcWidth, create vectors with the last pixel replicated
+          const lastPixelTR = load<u8>(srcRow0 + srcWidth - 1);
+          const lastPixelBR = load<u8>(srcRow1 + srcWidth - 1);
+          
+          topRight = v128.splat<u8>(lastPixelTR);
+          bottomRight = v128.splat<u8>(lastPixelBR);
+        }
+      }
+      
+      // Load bottom row
+      const bottomLeft = v128.load(srcRow1 + x);
+      
+      // Calculate all four interpolated values for each pixel using SIMD
+      const topAvg = i8x16.avgr_u(topLeft, topRight);    // Horizontal average (TL+TR+1)>>1
+      const bottomAvg = i8x16.avgr_u(bottomLeft, bottomRight);
+      const vAvg = i8x16.avgr_u(topLeft, bottomLeft);    // Vertical average (TL+BL+1)>>1
+      const diagAvg = i8x16.avgr_u(topAvg, bottomAvg);   // Approximates (TL+TR+BL+BR+2)>>2
+      
+      // Use SIMD shuffle to interleave pixels for the first 8 pixels
+      // Interleave topLeft and topAvg for the top row
+      const row0_interleaved1 = i8x16.shuffle(
+        topLeft, topAvg,
+        0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23
+      );
+      
+      const row0_interleaved2 = i8x16.shuffle(
+        topLeft, topAvg,
+        8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31
+      );
+      
+      // Interleave vAvg and diagAvg for the bottom row
+      const row1_interleaved1 = i8x16.shuffle(
+        vAvg, diagAvg,
+        0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23
+      );
+      
+      const row1_interleaved2 = i8x16.shuffle(
+        vAvg, diagAvg,
+        8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31
+      );
+      
+      // Store the interleaved pixels directly to the destination
+      v128.store(dstRow0 + 2 * x, row0_interleaved1);
+      v128.store(dstRow0 + 2 * x + 16, row0_interleaved2);
+      v128.store(dstRow1 + 2 * x, row1_interleaved1);
+      v128.store(dstRow1 + 2 * x + 16, row1_interleaved2);
+    }
+    
+    // Handle remaining pixels with scalar code
+    for (; x < srcWidth; x++) {
+      const topLeft = load<u8>(srcRow0 + x);
+      const topRight = (x + 1 < srcWidth) ? load<u8>(srcRow0 + x + 1) : topLeft;
+      const bottomLeft = load<u8>(srcRow1 + x);
+      const bottomRight = (x + 1 < srcWidth) ? load<u8>(srcRow1 + x + 1) : bottomLeft;
+      
+      store<u8>(dstRow0 + 2 * x, topLeft);
+      store<u8>(dstRow0 + 2 * x + 1, <u8>((topLeft + topRight + 1) >> 1));
+      store<u8>(dstRow1 + 2 * x, <u8>((topLeft + bottomLeft + 1) >> 1));
+      store<u8>(dstRow1 + 2 * x + 1, <u8>((topLeft + topRight + bottomLeft + bottomRight + 2) >> 2));
+    }
+  }
+}

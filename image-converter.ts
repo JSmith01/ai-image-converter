@@ -23,6 +23,7 @@ interface WasmFunctions {
     Nv12ToCHW(inputNv12: i32, outputBuffer: i32, width: i32, height: i32): void;
     I420ToCHW(inputNv12: i32, outputBuffer: i32, width: i32, height: i32): void;
     I420TileToCHW(inputI420$: i32, outputBuffer$: i32, x: i32, y: i32, width: i32, height: i32, frameWidth: i32, frameHeight: i32): void;
+    bilinearUpscaleChannel(src: i32, dst: i32, width: i32, height: i32): void;
 }
 
 const alignSizeTo16 = (n: number) => Math.ceil(n / 16) * 16;
@@ -80,6 +81,15 @@ class ImageConverter {
     // Y component only
     convertI420ToHW(width: number, height: number) {
         return this.convertNv12ToHW(width, height);
+    }
+
+    convertI420ToCHWBilinear(width: number, height: number) {
+        const fullPlaneSize = width * height
+        this.wasmHelpers.bilinearUpscaleChannel(fullPlaneSize, this.outputPtr, width, height); // U to *outputPtr
+        this.wasmHelpers.bilinearUpscaleChannel(fullPlaneSize * 1.25, fullPlaneSize * 2, width, height); // V to *(fullPlaneSize * 2)
+        new Uint8Array(this.memory.buffer).copyWithin(fullPlaneSize, this.outputPtr, this.outputPtr + fullPlaneSize); // move U to *fullPlaneSize
+
+        this.wasmHelpers.Nv12ToHW(0, this.outputPtr, width * height * 3); // Y == U == V (sizes)
     }
 
     // Y component only
