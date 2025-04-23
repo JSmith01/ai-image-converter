@@ -45,7 +45,7 @@ class ImageConverter {
 
     _getAlignedYUVBufferSize() {
         // considering input is I420 or NV12, so U and V have quarter of Y (half in both vertical and horizontal)
-        return alignSizeTo16(this.currentMaxSize * 1.5);
+        return alignSizeTo16(this.currentMaxSize * 3);
     }
 
     _getMemorySize() {
@@ -84,12 +84,15 @@ class ImageConverter {
     }
 
     convertI420ToCHWBilinear(width: number, height: number) {
-        const fullPlaneSize = width * height
+        const mem = new Uint8Array(this.memory.buffer);
+        const fullPlaneSize = width * height;
         this.wasmHelpers.bilinearUpscaleChannel(fullPlaneSize, this.outputPtr, width / 2, height / 2); // U to *outputPtr
         this.wasmHelpers.bilinearUpscaleChannel(fullPlaneSize * 1.25, fullPlaneSize * 2, width / 2, height / 2); // V to *(fullPlaneSize * 2)
-        new Uint8Array(this.memory.buffer).copyWithin(fullPlaneSize, this.outputPtr, this.outputPtr + fullPlaneSize); // move U to *fullPlaneSize
-
-        this.wasmHelpers.Nv12ToHW(0, this.outputPtr, width * height * 3); // Y == U == V (sizes)
+        mem.copyWithin(fullPlaneSize, this.outputPtr, this.outputPtr + fullPlaneSize);
+        
+        this.wasmHelpers.Nv12ToHW(0, this.outputPtr, fullPlaneSize);
+        this.wasmHelpers.Nv12ToHW(fullPlaneSize, this.outputPtr + fullPlaneSize * 4, fullPlaneSize);
+        this.wasmHelpers.Nv12ToHW(fullPlaneSize * 2, this.outputPtr + fullPlaneSize * 8, fullPlaneSize);
     }
 
     // Y component only
