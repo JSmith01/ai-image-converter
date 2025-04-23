@@ -85,8 +85,8 @@ class ImageConverter {
 
     convertI420ToCHWBilinear(width: number, height: number) {
         const fullPlaneSize = width * height
-        this.wasmHelpers.bilinearUpscaleChannel(fullPlaneSize, this.outputPtr, width, height); // U to *outputPtr
-        this.wasmHelpers.bilinearUpscaleChannel(fullPlaneSize * 1.25, fullPlaneSize * 2, width, height); // V to *(fullPlaneSize * 2)
+        this.wasmHelpers.bilinearUpscaleChannel(fullPlaneSize, this.outputPtr, width / 2, height / 2); // U to *outputPtr
+        this.wasmHelpers.bilinearUpscaleChannel(fullPlaneSize * 1.25, fullPlaneSize * 2, width / 2, height / 2); // V to *(fullPlaneSize * 2)
         new Uint8Array(this.memory.buffer).copyWithin(fullPlaneSize, this.outputPtr, this.outputPtr + fullPlaneSize); // move U to *fullPlaneSize
 
         this.wasmHelpers.Nv12ToHW(0, this.outputPtr, width * height * 3); // Y == U == V (sizes)
